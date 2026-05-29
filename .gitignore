@@ -1,0 +1,12 @@
+# Environment variables / API keys
+.env
+
+# Python caching & virtual environments
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Output directories
+output/
