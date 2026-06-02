@@ -3,9 +3,11 @@ scikit-learn>=1.3
 numpy>=1.24
 pandas>=2.0
 requests>=2.31.0
+openai>=1.0.0
+pytest>=8.0
 
 
-# For HuggingFace mode (optional, comment out if not needed)
+# Optional local-model alternatives, not required for the OpenAI GPT workflow:
 # transformers>=4.35
 # torch>=2.0
 # sentence-transformers>=2.2
