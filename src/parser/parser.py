@@ -114,6 +114,27 @@ def parse_queries(filepath: str) -> dict[int, str]:
     return queries
 
 
+def parse_query_file(filepath: str) -> dict[int, str]:
+    """
+    Parse an external batch query file.
+
+    Supports CISI-style .I/.W files. If no CISI markers are found, falls back
+    to one query per non-empty line with auto-generated IDs starting from 1.
+    """
+    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        text = f.read()
+
+    if ".I " in text and ".W" in text:
+        return parse_queries(filepath)
+
+    queries = {}
+    for i, line in enumerate(text.splitlines(), 1):
+        query = line.strip()
+        if query:
+            queries[len(queries) + 1] = query
+    return queries
+
+
 def parse_qrels(filepath: str) -> dict[int, set[int]]:
     """
     Parse qrels.text → dict {query_id: set of relevant doc_ids}
