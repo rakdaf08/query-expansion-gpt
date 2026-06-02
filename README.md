@@ -1,6 +1,6 @@
 # Query Expansion GPT - STBI
 
-Program Information Retrieval untuk koleksi CISI dengan Query Expansion menggunakan OpenAI GPT. Program mendukung mode interaktif dan batch, pilihan preprocessing, pilihan pembobotan, ranking dokumen, similarity score, AP/MAP, serta output eksperimen dalam JSON dan CSV.
+Program Information Retrieval untuk koleksi CISI dengan Query Expansion menggunakan OpenAI GPT atau HuggingFace LLM. Program mendukung mode interaktif dan batch, pilihan preprocessing, pilihan pembobotan, ranking dokumen, similarity score, AP/MAP, serta output eksperimen dalam JSON dan CSV.
 
 ## Instalasi
 
@@ -10,7 +10,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Untuk fitur Query Expansion, buat file `.env`:
+Untuk fitur Query Expansion, buat file `.env`. OpenAI adalah opsi GPT literal, sedangkan HuggingFace tersedia sebagai fallback praktis jika quota OpenAI tidak tersedia.
 
 ```bash
 cp .env.example .env
@@ -20,6 +20,7 @@ Isi:
 
 ```text
 OPENAI_API_KEY=sk-your-openai-api-key-here
+HF_TOKEN=hf-your-huggingface-token-here
 ```
 
 ## Cara Menjalankan
@@ -46,7 +47,13 @@ python main.py --query "information retrieval" --weighting tfidf_cosine --top-k 
 Single query dengan GPT expansion:
 
 ```bash
-python main.py --query "information retrieval" --expand --n-terms 5 --query-id 1
+python main.py --query "information retrieval" --expand --provider openai --n-terms 5 --query-id 1
+```
+
+Single query dengan HuggingFace expansion:
+
+```bash
+python main.py --query "information retrieval" --expand --provider huggingface --n-terms 5
 ```
 
 Batch retrieval default dari `data/query.text`:
@@ -58,7 +65,13 @@ python main.py --batch --weighting tfidf_cosine --top-k 10
 Batch retrieval dengan GPT expansion:
 
 ```bash
-python main.py --batch --expand --n-terms 5 --weighting tfidf_cosine
+python main.py --batch --expand --provider openai --n-terms 5 --weighting tfidf_cosine
+```
+
+Batch retrieval dengan HuggingFace expansion:
+
+```bash
+python main.py --batch --expand --provider huggingface --n-terms 5 --weighting tfidf_cosine
 ```
 
 Batch memakai file query eksternal:
@@ -135,14 +148,15 @@ Untuk query expanded, term asli diberi bobot `1.0`, sedangkan term tambahan mema
 - `src/indexing/inverted_index.py`: inverted index, TF/IDF/TF-IDF, inverted file per dokumen.
 - `src/retrieval/retrieval.py`: retrieval, dot product, cosine similarity.
 - `src/evaluation/evaluation.py`: AP, MAP, precision, recall, F1.
-- `src/qe/gpt_expansion.py`: Query Expansion dengan OpenAI GPT.
+- `src/qe/gpt_expansion.py`: Query Expansion dengan OpenAI GPT atau HuggingFace LLM.
 - `tests/test_core.py`: unit test utama.
 
 ## Library
 
 - `nltk`: stopword dan Porter stemming.
 - `openai`: akses OpenAI GPT Responses API.
-- `requests`, `numpy`, `pandas`, `scikit-learn`: dependensi pendukung/eksperimen.
+- `requests`: akses HuggingFace router API.
+- `numpy`, `pandas`, `scikit-learn`: dependensi pendukung/eksperimen.
 - `pytest`: test runner.
 
 ## Testing
@@ -158,9 +172,16 @@ python main.py --query "information retrieval" --weighting tfidf_cosine --top-k 
 python main.py --batch --weighting tfidf_cosine --top-k 10
 ```
 
-Smoke test dengan GPT membutuhkan `OPENAI_API_KEY`:
+Smoke test dengan OpenAI GPT membutuhkan `OPENAI_API_KEY`:
 
 ```bash
-python main.py --query "information retrieval" --expand --n-terms 5
-python main.py --batch --expand --n-terms 5
+python main.py --query "information retrieval" --expand --provider openai --n-terms 5
+python main.py --batch --expand --provider openai --n-terms 5
+```
+
+Smoke test dengan HuggingFace membutuhkan `HF_TOKEN`:
+
+```bash
+python main.py --query "information retrieval" --expand --provider huggingface --n-terms 5
+python main.py --batch --expand --provider huggingface --n-terms 5
 ```

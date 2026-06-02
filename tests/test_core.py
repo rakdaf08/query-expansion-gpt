@@ -118,3 +118,18 @@ def test_gpt_expansion_parser_without_api_call():
 
     assert expanded == "information retrieval search ranking"
     assert weights == {"search": 0.91, "ranking": 0.82}
+
+
+def test_gpt_expansion_parser_supports_legacy_hf_shape():
+    expander = QueryExpander.__new__(QueryExpander)
+    raw = '{"expanded_terms": ["search", "ranking"], "weights": [0.88, 0.77]}'
+
+    expanded, weights = expander._parse_expansion_output("information retrieval", raw, 5)
+
+    assert expanded == "information retrieval search ranking"
+    assert weights == {"search": 0.88, "ranking": 0.77}
+
+
+def test_query_expander_rejects_unknown_provider_before_api_key_check():
+    with pytest.raises(ValueError, match="Provider tidak valid"):
+        QueryExpander(provider="unknown")
