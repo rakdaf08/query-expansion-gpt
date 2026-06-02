@@ -84,15 +84,22 @@ def load_system(
     }
 
 
-def get_expander(model_name: str | None = None, openai_api_key: str | None = None):
+def get_expander(
+    provider: str = "openai",
+    model_name: str | None = None,
+    openai_api_key: str | None = None,
+    hf_token: str | None = None,
+):
     """Lazy-load query expander."""
     from src.qe.gpt_expansion import QueryExpander
 
-    kwargs = {}
+    kwargs = {"provider": provider}
     if model_name:
         kwargs["model_name"] = model_name
     if openai_api_key:
         kwargs["openai_api_key"] = openai_api_key
+    if hf_token:
+        kwargs["hf_token"] = hf_token
     return QueryExpander(**kwargs)
 
 
@@ -357,6 +364,9 @@ def run_batch(
         "all_terms": all_terms,
         "top_k_display": top_k,
     }
+    if expander:
+        config["qe_provider"] = getattr(expander, "provider", "")
+        config["qe_model"] = getattr(expander, "model_name", "")
 
     json_path = OUTPUT / "batch_results.json"
     with open(json_path, "w", encoding="utf-8") as f:
@@ -427,6 +437,8 @@ def run_batch(
             "expand",
             "n_terms",
             "all_terms",
+            "qe_provider",
+            "qe_model",
             "top_k_display",
             "map_before",
             "map_after",
@@ -517,12 +529,27 @@ def interactive_mode(state: dict):
             all_terms = False
             if expand:
                 if expander is None:
-                    token_input = input("  OPENAI_API_KEY (Enter = env/.env): ").strip()
-                    model_input = input("  OpenAI model [default gpt-5-mini]: ").strip()
-                    expander = get_expander(
-                        model_name=model_input or None,
-                        openai_api_key=token_input or None,
+                    provider_input = prompt_choice(
+                        "QE provider",
+                        ("openai", "huggingface"),
+                        "huggingface",
                     )
+                    if provider_input == "huggingface":
+                        token_input = input("  HF_TOKEN (Enter = env/.env): ").strip()
+                        model_input = input("  HF model [default Qwen/Qwen2.5-7B-Instruct]: ").strip()
+                        expander = get_expander(
+                            provider=provider_input,
+                            model_name=model_input or None,
+                            hf_token=token_input or None,
+                        )
+                    else:
+                        token_input = input("  OPENAI_API_KEY (Enter = env/.env): ").strip()
+                        model_input = input("  OpenAI model [default gpt-5-mini]: ").strip()
+                        expander = get_expander(
+                            provider=provider_input,
+                            model_name=model_input or None,
+                            openai_api_key=token_input or None,
+                        )
                 n_terms_str = input("  Number of expansion terms [default 5]: ").strip()
                 n_terms = int(n_terms_str) if n_terms_str.isdigit() else 5
                 all_terms = prompt_bool("Use all generated terms?", False)
@@ -543,12 +570,27 @@ def interactive_mode(state: dict):
 
         elif choice == "4":
             if expander is None:
-                token_input = input("  OPENAI_API_KEY (Enter = env/.env): ").strip()
-                model_input = input("  OpenAI model [default gpt-5-mini]: ").strip()
-                expander = get_expander(
-                    model_name=model_input or None,
-                    openai_api_key=token_input or None,
+                provider_input = prompt_choice(
+                    "QE provider",
+                    ("openai", "huggingface"),
+                    "huggingface",
                 )
+                if provider_input == "huggingface":
+                    token_input = input("  HF_TOKEN (Enter = env/.env): ").strip()
+                    model_input = input("  HF model [default Qwen/Qwen2.5-7B-Instruct]: ").strip()
+                    expander = get_expander(
+                        provider=provider_input,
+                        model_name=model_input or None,
+                        hf_token=token_input or None,
+                    )
+                else:
+                    token_input = input("  OPENAI_API_KEY (Enter = env/.env): ").strip()
+                    model_input = input("  OpenAI model [default gpt-5-mini]: ").strip()
+                    expander = get_expander(
+                        provider=provider_input,
+                        model_name=model_input or None,
+                        openai_api_key=token_input or None,
+                    )
             n_terms_str = input("  Number of expansion terms [default 5]: ").strip()
             n_terms = int(n_terms_str) if n_terms_str.isdigit() else 5
             all_terms = prompt_bool("Use all generated terms?", False)
@@ -601,7 +643,14 @@ def parse_args():
     parser.add_argument("--no-stemming", action="store_true")
     parser.add_argument("--no-stopword", action="store_true")
     parser.add_argument("--openai-api-key", type=str, default=None, help="OpenAI API key")
-    parser.add_argument("--model", type=str, default=None, help="OpenAI model name")
+    parser.add_argument("--hf-token", type=str, default=None, help="HuggingFace API token")
+    parser.add_argument(
+        "--provider",
+        choices=("openai", "huggingface"),
+        default="openai",
+        help="Query expansion provider",
+    )
+    parser.add_argument("--model", type=str, default=None, help="QE model name")
     return parser.parse_args()
 
 
@@ -625,8 +674,10 @@ def main():
     expander = None
     if args.expand:
         expander = get_expander(
+            provider=args.provider,
             model_name=args.model,
             openai_api_key=args.openai_api_key,
+            hf_token=args.hf_token,
         )
 
     if args.query:
