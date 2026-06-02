@@ -1,5 +1,5 @@
 """
-retrieval.py — TF-IDF retrieval with cosine similarity
+retrieval.py - ranked retrieval with selectable weighting modes.
 """
 
 import math
@@ -20,29 +20,67 @@ def cosine_similarity(vec_a: dict[str, float], vec_b: dict[str, float]) -> float
     return dot / (norm_a * norm_b)
 
 
+def dot_product(vec_a: dict[str, float], vec_b: dict[str, float]) -> float:
+    """Dot product between two sparse vectors."""
+    if not vec_a or not vec_b:
+        return 0.0
+    if len(vec_a) <= len(vec_b):
+        return sum(weight * vec_b.get(term, 0.0) for term, weight in vec_a.items())
+    return sum(vec_a.get(term, 0.0) * weight for term, weight in vec_b.items())
+
+
 class Retriever:
-    def __init__(self, inverted_index, tf_scheme: str = "log"):
+    def __init__(
+        self,
+        inverted_index,
+        tf_scheme: str = "log",
+        weighting_mode: str = "tfidf_cosine",
+    ):
         """
         Parameters
         ----------
         inverted_index : InvertedIndex instance
         tf_scheme      : one of 'raw', 'binary', 'log', 'augmented'
+        weighting_mode : one of 'tf', 'idf', 'tfidf', 'tfidf_cosine'
         """
         self.index = inverted_index
         self.tf_scheme = tf_scheme
+        self.weighting_mode = weighting_mode
         self._doc_vectors: dict[int, dict[str, float]] = {}
 
     def build_doc_vectors(self):
-        """Pre-compute all document TF-IDF vectors (call once after index build)."""
+        """Pre-compute all document vectors (call once after index build)."""
         print("Building document vectors...", end=" ", flush=True)
         for doc_id in self.index.doc_lengths:
-            self._doc_vectors[doc_id] = self.index.get_doc_vector(doc_id, self.tf_scheme)
+            self._doc_vectors[doc_id] = self.index.get_doc_vector(
+                doc_id,
+                self.tf_scheme,
+                self.weighting_mode,
+            )
         print("done.")
+
+    def _query_vector(
+        self,
+        query_tokens: list[str],
+        query_term_weights: dict[str, float] | None = None,
+    ) -> dict[str, float]:
+        return self.index.get_query_vector(
+            query_tokens,
+            self.tf_scheme,
+            self.weighting_mode,
+            term_weights=query_term_weights,
+        )
+
+    def _similarity(self, query_vec: dict[str, float], doc_vec: dict[str, float]) -> float:
+        if self.weighting_mode == "tfidf_cosine":
+            return cosine_similarity(query_vec, doc_vec)
+        return dot_product(query_vec, doc_vec)
 
     def retrieve(
         self,
         query_tokens: list[str],
         top_k: int = 10,
+        query_term_weights: dict[str, float] | None = None,
     ) -> list[tuple[int, float]]:
         """
         Retrieve top_k documents for given query tokens.
@@ -51,7 +89,7 @@ class Retriever:
         -------
         list of (doc_id, score) sorted by score descending
         """
-        query_vec = self.index.get_query_vector(query_tokens, self.tf_scheme)
+        query_vec = self._query_vector(query_tokens, query_term_weights)
         if not query_vec:
             return []
 
@@ -65,7 +103,7 @@ class Retriever:
 
         for doc_id in candidate_docs:
             doc_vec = self._doc_vectors.get(doc_id, {})
-            sim = cosine_similarity(query_vec, doc_vec)
+            sim = self._similarity(query_vec, doc_vec)
             if sim > 0:
                 scores[doc_id] = sim
 
@@ -75,9 +113,10 @@ class Retriever:
     def retrieve_all(
         self,
         query_tokens: list[str],
+        query_term_weights: dict[str, float] | None = None,
     ) -> list[tuple[int, float]]:
         """Retrieve ALL scored documents (needed for MAP calculation)."""
-        query_vec = self.index.get_query_vector(query_tokens, self.tf_scheme)
+        query_vec = self._query_vector(query_tokens, query_term_weights)
         if not query_vec:
             return []
 
@@ -89,7 +128,7 @@ class Retriever:
         scores: dict[int, float] = {}
         for doc_id in candidate_docs:
             doc_vec = self._doc_vectors.get(doc_id, {})
-            sim = cosine_similarity(query_vec, doc_vec)
+            sim = self._similarity(query_vec, doc_vec)
             if sim > 0:
                 scores[doc_id] = sim
 

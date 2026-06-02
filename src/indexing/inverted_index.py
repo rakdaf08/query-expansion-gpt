@@ -1,6 +1,8 @@
 """
-inverted_index.py — Inverted index + TF/IDF weighting
-Supports: raw TF, binary TF, log TF, augmented TF, IDF, TF-IDF
+inverted_index.py - Inverted index + TF/IDF weighting.
+
+Supports TF variants (raw, binary, log, augmented) and weighting modes:
+TF, IDF, TF-IDF, and TF-IDF with cosine normalization at retrieval time.
 """
 
 import math
@@ -69,6 +71,15 @@ class InvertedIndex:
             return 0.0
         return math.log(self.N / df)
 
+    def tf_value(self, term: str, doc_id: int, tf_scheme: str = "log") -> float:
+        tf_fn = {
+            "raw": self.tf_raw,
+            "binary": self.tf_binary,
+            "log": self.tf_log,
+            "augmented": self.tf_augmented,
+        }.get(tf_scheme, self.tf_log)
+        return tf_fn(term, doc_id)
+
     def tfidf(self, term: str, doc_id: int, tf_scheme: str = "log") -> float:
         tf_fn = {
             "raw": self.tf_raw,
@@ -78,42 +89,82 @@ class InvertedIndex:
         }.get(tf_scheme, self.tf_log)
         return tf_fn(term, doc_id) * self.idf(term)
 
+    def term_weight(
+        self,
+        term: str,
+        doc_id: int,
+        tf_scheme: str = "log",
+        weighting_mode: str = "tfidf_cosine",
+    ) -> float:
+        """Return the selected term weight for one term in one document."""
+        if weighting_mode == "tf":
+            return self.tf_value(term, doc_id, tf_scheme)
+        if weighting_mode == "idf":
+            return self.idf(term) if doc_id in self.index.get(term, {}) else 0.0
+        return self.tfidf(term, doc_id, tf_scheme)
+
     # ─── Document vector builder ──────────────────────────────────────────────
 
-    def get_doc_vector(self, doc_id: int, tf_scheme: str = "log") -> dict[str, float]:
-        """Return TF-IDF vector for a document (only terms present in doc)."""
+    def get_doc_vector(
+        self,
+        doc_id: int,
+        tf_scheme: str = "log",
+        weighting_mode: str = "tfidf_cosine",
+    ) -> dict[str, float]:
+        """Return a weighted vector for a document (only terms present in doc)."""
         vec = {}
         for term, postings in self.index.items():
             if doc_id in postings:
-                vec[term] = self.tfidf(term, doc_id, tf_scheme)
+                vec[term] = self.term_weight(term, doc_id, tf_scheme, weighting_mode)
         return vec
 
-    def get_query_vector(self, tokens: list[str], tf_scheme: str = "log") -> dict[str, float]:
+    def _query_tf(self, rf: int, max_tf: int, tf_scheme: str) -> float:
+        if tf_scheme == "raw":
+            return float(rf)
+        if tf_scheme == "binary":
+            return 1.0
+        if tf_scheme == "log":
+            return 1.0 + math.log(rf) if rf > 0 else 0.0
+        if tf_scheme == "augmented":
+            return 0.5 + 0.5 * (rf / (max_tf or 1)) if rf > 0 else 0.0
+        return 1.0 + math.log(rf) if rf > 0 else 0.0
+
+    def get_query_vector(
+        self,
+        tokens: list[str],
+        tf_scheme: str = "log",
+        weighting_mode: str = "tfidf_cosine",
+        term_weights: dict[str, float] | None = None,
+    ) -> dict[str, float]:
         """
-        Build TF-IDF vector for a query.
-        Uses same TF scheme as documents.
+        Build a weighted vector for a query.
+
+        term_weights can boost expansion terms. It is applied after the selected
+        TF/IDF/TF-IDF formula so original terms can stay at 1.0 while GPT-added
+        terms use model-provided weights.
         """
         raw_tf: dict[str, int] = defaultdict(int)
         for t in tokens:
             raw_tf[t] += 1
 
         vec = {}
+        max_tf = max(raw_tf.values()) if raw_tf else 1
         for term, rf in raw_tf.items():
             idf_val = self.idf(term)
             if idf_val == 0:
-                continue  # term not in corpus → skip
-            if tf_scheme == "raw":
-                tf_val = float(rf)
-            elif tf_scheme == "binary":
-                tf_val = 1.0
-            elif tf_scheme == "log":
-                tf_val = 1.0 + math.log(rf) if rf > 0 else 0.0
-            elif tf_scheme == "augmented":
-                max_tf = max(raw_tf.values()) or 1
-                tf_val = 0.5 + 0.5 * (rf / max_tf)
+                continue  # term not in corpus -> skip
+
+            tf_val = self._query_tf(rf, max_tf, tf_scheme)
+            if weighting_mode == "tf":
+                weight = tf_val
+            elif weighting_mode == "idf":
+                weight = idf_val
             else:
-                tf_val = 1.0 + math.log(rf) if rf > 0 else 0.0
-            vec[term] = tf_val * idf_val
+                weight = tf_val * idf_val
+
+            if term_weights:
+                weight *= term_weights.get(term, 1.0)
+            vec[term] = weight
         return vec
 
     # ─── Inverted index viewer ────────────────────────────────────────────────
@@ -137,6 +188,51 @@ class InvertedIndex:
             print(f"{doc_id:<10} {tf:<10} {log_tf:<10.4f} {tfidf:<15.4f}")
         if len(postings) > top_n:
             print(f"  ... and {len(postings) - top_n} more docs")
+
+    def show_doc_inverted_file(
+        self,
+        doc_id: int,
+        tf_scheme: str = "log",
+        top_n: int | None = None,
+    ):
+        """Display all index terms that occur in a specific document."""
+        if doc_id not in self.doc_lengths:
+            print(f"Document {doc_id} not found in index.")
+            return
+
+        rows = []
+        for term, postings in self.index.items():
+            raw_tf = postings.get(doc_id, 0)
+            if raw_tf == 0:
+                continue
+            rows.append(
+                {
+                    "term": term,
+                    "raw_tf": raw_tf,
+                    "selected_tf": self.tf_value(term, doc_id, tf_scheme),
+                    "df": self.df.get(term, 0),
+                    "idf": self.idf(term),
+                    "tfidf": self.tfidf(term, doc_id, tf_scheme),
+                }
+            )
+
+        rows.sort(key=lambda r: (-r["tfidf"], r["term"]))
+        shown_rows = rows if top_n is None else rows[:top_n]
+
+        print(f"\nInverted File for document: {doc_id}")
+        print(f"Document length: {self.doc_lengths[doc_id]} tokens")
+        print(f"Unique terms   : {len(rows)}")
+        print(f"TF scheme      : {tf_scheme}")
+        print(f"{'Term':<24} {'Raw TF':<8} {'TF':<10} {'DF':<8} {'IDF':<10} {'TF-IDF':<10}")
+        print("-" * 78)
+        for row in shown_rows:
+            print(
+                f"{row['term']:<24} {row['raw_tf']:<8} "
+                f"{row['selected_tf']:<10.4f} {row['df']:<8} "
+                f"{row['idf']:<10.4f} {row['tfidf']:<10.4f}"
+            )
+        if top_n is not None and len(rows) > top_n:
+            print(f"  ... and {len(rows) - top_n} more terms")
 
 
 if __name__ == "__main__":
