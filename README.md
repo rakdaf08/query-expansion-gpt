@@ -185,3 +185,8 @@ Smoke test dengan HuggingFace membutuhkan `HF_TOKEN`:
 python main.py --query "information retrieval" --expand --provider huggingface --n-terms 5
 python main.py --batch --expand --provider huggingface --n-terms 5
 ```
+
+Kalau butuh info terkait AP/MAP contohnya jadi berikut:
+```bash
+python main.py --query "information retrieval" --query-id 1 --expand --provider huggingface --n-terms 5
+```
