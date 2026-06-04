@@ -13,7 +13,7 @@ from src.qe.gpt_expansion import QueryExpander
 from src.evaluation.evaluation import evaluate_batch
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = 'output'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 BASE_DIR = Path(__file__).parent
