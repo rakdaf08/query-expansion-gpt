@@ -16,21 +16,11 @@
             transition: all 0.2s ease-in-out;
         }
         
-        /* Kustomisasi Scrollbar untuk panel hasil (opsional, agar terlihat lebih rapi) */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #d4d4d4; 
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #a3a3a3; 
-        }
+        /* Kustomisasi Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
     </style>
 </head>
 <body class="bg-[#F8F9FA] text-neutral-900 h-screen overflow-hidden selection:bg-neutral-800 selection:text-white">
@@ -42,8 +32,10 @@
         <div class="text-sm font-medium text-neutral-500">CISI Dataset Experiment</div>
     </nav>
 
-    <form method="POST" action="/" class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-73px)] pt-8 pb-8">
+    <form method="POST" action="/" enctype="multipart/form-data" class="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-73px)] pt-8 pb-8">
         
+        <input type="hidden" id="mode_input" name="mode" value="{{ active_tab if active_tab else 'interactive' }}">
+
         <aside class="lg:col-span-4 h-full min-h-0 overflow-y-auto custom-scrollbar pr-2 pb-10">
             <div class="bg-white border-2 border-neutral-900 rounded-xl p-6 justisio-shadow">
                 <h2 class="font-bold text-lg mb-4 border-b border-neutral-100 pb-3">Parameter Sistem</h2>
@@ -96,10 +88,10 @@
                         </div>
                         <div>
                             <label class="block text-sm mb-1 font-medium text-neutral-600">Batas Term Tambahan</label>
-                            <input type="number" name="term_limit" value="{{ config.term_limit if config else 5 }}" class="w-full border-2 border-neutral-200 rounded-lg p-2.5 text-sm focus:border-neutral-900 outline-none">
+                            <input type="number" id="term_limit_input" name="term_limit" value="{{ config.term_limit if config else 5 }}" class="w-full border-2 border-neutral-200 rounded-lg p-2.5 text-sm focus:border-neutral-900 outline-none transition-colors">
                         </div>
                         <label class="flex items-center space-x-3 cursor-pointer">
-                            <input type="checkbox" name="use_all_terms" class="w-4 h-4 accent-neutral-900" {% if config and config.use_all_terms %}checked{% endif %}>
+                            <input type="checkbox" id="use_all_terms_checkbox" name="use_all_terms" class="w-4 h-4 accent-neutral-900" {% if config and config.use_all_terms %}checked{% endif %}>
                             <span class="text-sm font-medium">Gunakan semua term (All)</span>
                         </label>
                     </div>
@@ -107,12 +99,14 @@
             </div>
         </aside>
 
-        <div class="lg:col-span-8 flex flex-col h-full min-h-0 gap-6 pb-6">
+        <div class="lg:col-span-8 flex flex-col h-full min-h-0 gap-4 pb-6">
             
-            <div class="flex-shrink-0 bg-white border-2 border-neutral-900 rounded-xl p-2 flex justisio-shadow justisio-shadow-hover focus-within:ring-2 focus-within:ring-neutral-900 focus-within:ring-offset-2 transition-all">
-                <input type="text" name="query_text" value="{{ query_text if query_text else '' }}" placeholder="Masukkan query pencarian Anda di sini..." required class="flex-1 bg-transparent px-4 outline-none text-lg placeholder-neutral-400 font-medium">
-                <button type="submit" class="bg-neutral-900 text-white font-bold px-8 py-3 rounded-lg hover:bg-neutral-800 transition-colors">
-                    Cari
+            <div class="flex space-x-2 border-b-2 border-neutral-200 mb-2">
+                <button type="button" id="tab_interactive" class="px-6 py-3 font-bold text-sm {% if not active_tab or active_tab == 'interactive' %}text-neutral-900 border-b-2 border-neutral-900{% else %}text-neutral-400{% endif %}">
+                    Interaktif
+                </button>
+                <button type="button" id="tab_batch" class="px-6 py-3 font-bold text-sm {% if active_tab == 'batch' %}text-neutral-900 border-b-2 border-neutral-900{% else %}text-neutral-400{% endif %}">
+                    Evaluasi Batch (MAP)
                 </button>
             </div>
 
@@ -122,83 +116,187 @@
             </div>
             {% endif %}
 
-            <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-4 space-y-6">
-                {% if hasil %}
-                    
-                    {% if hasil.is_expanded %}
-                    <div class="bg-white border border-neutral-200 rounded-xl p-6">
-                        <h3 class="text-xs font-bold tracking-widest text-neutral-500 uppercase mb-4">Laporan Ekspansi Kata Kunci</h3>
+            <div id="view_interactive" class="flex flex-col h-full min-h-0 {% if active_tab == 'batch' %}hidden{% endif %}">
+                <div class="flex-shrink-0 bg-white border-2 border-neutral-900 rounded-xl p-2 flex justisio-shadow justisio-shadow-hover focus-within:ring-2 focus-within:ring-neutral-900 mb-6 transition-all">
+                    <input type="text" name="query_text" value="{{ query_text if query_text else '' }}" placeholder="Masukkan query pencarian tunggal..." class="flex-1 bg-transparent px-4 outline-none text-lg font-medium placeholder-neutral-400">
+                    <button type="submit" class="bg-neutral-900 text-white font-bold px-8 py-3 rounded-lg hover:bg-neutral-800 transition-colors">Cari</button>
+                </div>
+                
+                <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-4 space-y-6">
+                    {% if hasil %}
                         
-                        <div class="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-2 mb-3">
-                            <span class="text-sm text-neutral-500 font-medium">Query Asli</span>
-                            <span class="font-medium text-neutral-900">{{ query_text }}</span>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-2 mb-5">
-                            <span class="text-sm text-neutral-500 font-medium">Hasil Ekspansi</span>
-                            <span class="font-bold text-neutral-900">{{ hasil.expanded_query }}</span>
-                        </div>
-                        
-                        <div class="flex flex-wrap gap-2 pt-4 border-t border-neutral-100">
-                            {% for term, weight in hasil.expansion_weights.items() %}
-                            <span class="text-xs font-medium bg-neutral-100 border border-neutral-200 px-3 py-1.5 rounded-md">
-                                {{ term }} <span class="text-neutral-400 ml-2">{{ "%.2f"|format(weight) }}</span>
-                            </span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between pb-2 sticky top-0 bg-[#F8F9FA] z-10 py-2">
-                            <h2 class="font-bold text-2xl text-neutral-900 tracking-tight">Hasil Penelusuran</h2>
-                            <div class="text-right">
-                                <span class="block text-xs font-bold tracking-widest text-neutral-500 uppercase">Waktu Eksekusi</span>
-                                <span class="text-sm font-bold text-neutral-900">{{ "%.3f"|format(hasil.time_taken) }} detik</span>
+                        {% if hasil.is_expanded %}
+                        <div class="bg-white border border-neutral-200 rounded-xl p-6 mb-6">
+                            <h3 class="text-xs font-bold tracking-widest text-neutral-500 uppercase mb-4">Laporan Ekspansi Kata Kunci</h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-2 mb-3">
+                                <span class="text-sm text-neutral-500 font-medium">Query Asli</span>
+                                <span class="font-medium text-neutral-900">{{ query_text }}</span>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-2 mb-5">
+                                <span class="text-sm text-neutral-500 font-medium">Hasil Ekspansi</span>
+                                <span class="font-bold text-neutral-900">{{ hasil.expanded_query }}</span>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 pt-4 border-t border-neutral-100">
+                                {% for term, weight in hasil.expansion_weights.items() %}
+                                <span class="text-xs font-medium bg-neutral-100 border border-neutral-200 px-3 py-1.5 rounded-md">
+                                    {{ term }} <span class="text-neutral-400 ml-2">{{ "%.2f"|format(weight) }}</span>
+                                </span>
+                                {% endfor %}
                             </div>
                         </div>
-
-                        {% if hasil.results|length == 0 %}
-                        <div class="bg-white border border-neutral-200 rounded-xl p-8 text-center text-neutral-500 font-medium">
-                            Tidak ada dokumen yang relevan ditemukan untuk query ini.
-                        </div>
-                        {% else %}
-                            {% for doc in hasil.results %}
-                            <div class="bg-white border-2 border-neutral-200 rounded-xl p-6 hover:border-neutral-900 transition-colors group">
-                                <div class="flex justify-between items-center mb-3">
-                                    <span class="bg-neutral-900 text-white text-xs font-bold px-3 py-1 rounded-md">Peringkat #{{ loop.index }}</span>
-                                    <div class="flex gap-4">
-                                        <span class="text-sm font-medium text-neutral-500">Doc ID: <span class="text-neutral-900 font-bold">{{ doc.id }}</span></span>
-                                        <span class="text-sm font-medium text-neutral-500">Similarity: <span class="text-neutral-900 font-bold">{{ "%.4f"|format(doc.score) }}</span></span>
-                                    </div>
-                                </div>
-                                <h3 class="text-xl font-bold leading-snug group-hover:underline decoration-2 underline-offset-4 mb-2 cursor-pointer">
-                                    {{ doc.title }}
-                                </h3>
-                                <p class="text-sm text-neutral-600 leading-relaxed">
-                                    {{ doc.abstract[:250] }}{% if doc.abstract|length > 250 %}...{% endif %}
-                                </p>
-                            </div>
-                            {% endfor %}
                         {% endif %}
+
+                        <div class="bg-white border-2 border-neutral-200 rounded-xl p-6">
+                            <div class="flex items-center justify-between mb-6 pb-4 border-b border-neutral-100">
+                                <h2 class="font-bold text-xl text-neutral-900">Ditemukan {{ hasil.results|length }} Dokumen</h2>
+                                <span class="text-xs font-bold text-neutral-400 uppercase tracking-wider">{{ "%.3f"|format(hasil.time_taken) }} DETIK</span>
+                            </div>
+
+                            {% if hasil.results|length == 0 %}
+                            <div class="text-center text-neutral-500 py-4 font-medium">
+                                Tidak ada dokumen relevan yang ditemukan.
+                            </div>
+                            {% else %}
+                            <div class="space-y-6">
+                                {% for doc in hasil.results %}
+                                <div class="group border-b border-neutral-100 pb-6 last:border-b-0 last:pb-0">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <span class="text-xs font-bold bg-neutral-900 text-white px-2 py-1 rounded">Rank #{{ loop.index }}</span>
+                                        <div class="flex gap-4">
+                                            <span class="text-sm text-neutral-500 font-medium">ID: <span class="text-neutral-900 font-bold">{{ doc.id }}</span></span>
+                                            <span class="text-sm text-neutral-500 font-medium">Score: <span class="text-neutral-900 font-bold">{{ "%.4f"|format(doc.score) }}</span></span>
+                                        </div>
+                                    </div>
+                                    <h3 class="font-bold text-lg leading-tight group-hover:underline decoration-2 underline-offset-4 cursor-pointer">{{ doc.title }}</h3>
+                                    <p class="text-sm text-neutral-600 mt-2 leading-relaxed">{{ doc.abstract[:250] }}{% if doc.abstract|length > 250 %}...{% endif %}</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div id="view_batch" class="flex flex-col h-full min-h-0 {% if not active_tab or active_tab == 'interactive' %}hidden{% endif %}">
+                <div class="bg-white border-2 border-neutral-900 rounded-xl p-6 justisio-shadow mb-6 text-center">
+                    <h3 class="font-bold text-lg mb-2">Unggah File Query Batch</h3>
+                    <p class="text-sm text-neutral-500 mb-6">Unggah file teks berisi himpunan query (misal: query.text) untuk menghitung Mean Average Precision (MAP).</p>
+                    
+                    <input type="file" name="batch_file" accept=".txt,.text,.all" class="block w-full text-sm text-neutral-500 file:mr-4 file:py-3 file:px-6 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-neutral-900 file:text-white hover:file:bg-neutral-800 cursor-pointer border-2 border-dashed border-neutral-300 p-8 rounded-xl mb-4 transition-colors">
+                    
+                    <button type="submit" class="w-full bg-neutral-900 text-white font-bold py-4 rounded-lg hover:bg-neutral-800 transition-colors">
+                        Jalankan Evaluasi MAP
+                    </button>
+                    
+                    <p class="text-xs text-red-500 mt-3 font-medium">⚠️ Perhatian: Jika Ekspansi GPT aktif, proses batch bisa memakan waktu cukup lama (bergantung pada jumlah query dan batas API rate).</p>
+                </div>
+
+                {% if batch_hasil %}
+                <div class="bg-white border-2 border-neutral-200 rounded-xl p-8 flex-1 overflow-y-auto custom-scrollbar">
+                    <h2 class="font-bold text-2xl text-center mb-8">Laporan Perbandingan MAP</h2>
+                    
+                    <div class="grid grid-cols-2 gap-6 mb-8">
+                        <div class="border-2 border-neutral-100 rounded-xl p-6 text-center">
+                            <span class="text-sm font-bold text-neutral-500 uppercase tracking-widest block mb-2">Baseline (Tanpa AI)</span>
+                            <span class="text-4xl font-black text-neutral-900">{{ "%.4f"|format(batch_hasil.map_before) }}</span>
+                        </div>
+                        <div class="border-2 border-neutral-900 rounded-xl p-6 text-center bg-neutral-50">
+                            <span class="text-sm font-bold text-neutral-500 uppercase tracking-widest block mb-2">Dengan AI Expansion</span>
+                            <span class="text-4xl font-black text-neutral-900">{{ "%.4f"|format(batch_hasil.map_after) }}</span>
+                        </div>
                     </div>
+                    
+                    <div class="bg-neutral-100 rounded-lg p-4 flex justify-between items-center text-sm font-medium">
+                        <span>Total Query Diproses: <b>{{ batch_hasil.total_queries }}</b></span>
+                        <span>Selisih Perubahan (Delta): 
+                            <b class="{% if batch_hasil.delta > 0 %}text-green-600{% elif batch_hasil.delta < 0 %}text-red-600{% endif %}">
+                                {{ "%+.4f"|format(batch_hasil.delta) }}
+                            </b>
+                        </span>
+                        <span>Waktu: <b>{{ "%.1f"|format(batch_hasil.time_taken) }} detik</b></span>
+                    </div>
+                </div>
                 {% endif %}
             </div>
+
         </div>
     </form>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // 1. Toggle Panel GPT Options
             const toggleCheckbox = document.getElementById('gpt_toggle');
             const optionsPanel = document.getElementById('gpt_options');
-
             if (toggleCheckbox && optionsPanel) {
                 toggleCheckbox.addEventListener('change', function() {
-                    if (this.checked) {
-                        optionsPanel.classList.remove('hidden');
-                    } else {
-                        optionsPanel.classList.add('hidden');
+                    this.checked ? optionsPanel.classList.remove('hidden') : optionsPanel.classList.add('hidden');
+                });
+            }
+
+            // 2. Logika Disable "Batas Term Tambahan"
+            const termLimitInput = document.getElementById('term_limit_input');
+            const useAllTermsCheckbox = document.getElementById('use_all_terms_checkbox');
+            let previousLimit = termLimitInput ? termLimitInput.value : "5";
+
+            function toggleTermLimitDisplay() {
+                if (!termLimitInput || !useAllTermsCheckbox) return;
+                
+                if (useAllTermsCheckbox.checked) {
+                    // Simpan nilai lama sebelum mengubah menjadi teks "Semua"
+                    if (termLimitInput.type === 'number') {
+                        previousLimit = termLimitInput.value;
                     }
+                    termLimitInput.type = 'text';
+                    termLimitInput.value = 'Semua';
+                    termLimitInput.disabled = true;
+                    termLimitInput.classList.add('bg-neutral-100', 'text-neutral-400', 'cursor-not-allowed', 'border-neutral-300');
+                } else {
+                    termLimitInput.type = 'number';
+                    termLimitInput.value = previousLimit;
+                    termLimitInput.disabled = false;
+                    termLimitInput.classList.remove('bg-neutral-100', 'text-neutral-400', 'cursor-not-allowed', 'border-neutral-300');
+                }
+            }
+
+            // Inisialisasi awal saat render
+            toggleTermLimitDisplay();
+
+            if (useAllTermsCheckbox) {
+                useAllTermsCheckbox.addEventListener('change', toggleTermLimitDisplay);
+            }
+
+            // 3. Logika Sistem Tab
+            const modeInput = document.getElementById('mode_input');
+            const tabInteractive = document.getElementById('tab_interactive');
+            const tabBatch = document.getElementById('tab_batch');
+            const viewInteractive = document.getElementById('view_interactive');
+            const viewBatch = document.getElementById('view_batch');
+
+            if(tabInteractive && tabBatch) {
+                tabInteractive.addEventListener('click', function() {
+                    modeInput.value = 'interactive';
+                    viewInteractive.classList.remove('hidden');
+                    viewBatch.classList.add('hidden');
+                    
+                    tabInteractive.classList.add('text-neutral-900', 'border-b-2', 'border-neutral-900');
+                    tabInteractive.classList.remove('text-neutral-400');
+                    tabBatch.classList.add('text-neutral-400');
+                    tabBatch.classList.remove('text-neutral-900', 'border-b-2', 'border-neutral-900');
+                });
+
+                tabBatch.addEventListener('click', function() {
+                    modeInput.value = 'batch';
+                    viewBatch.classList.remove('hidden');
+                    viewInteractive.classList.add('hidden');
+                    
+                    tabBatch.classList.add('text-neutral-900', 'border-b-2', 'border-neutral-900');
+                    tabBatch.classList.remove('text-neutral-400');
+                    tabInteractive.classList.add('text-neutral-400');
+                    tabInteractive.classList.remove('text-neutral-900', 'border-b-2', 'border-neutral-900');
                 });
             }
         });
