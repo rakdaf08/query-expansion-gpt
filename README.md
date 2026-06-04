@@ -6,7 +6,8 @@ Program Information Retrieval untuk koleksi CISI dengan Query Expansion mengguna
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+(Mac) source .venv/bin/activate
+(Windows) .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -24,6 +25,14 @@ HF_TOKEN=hf-your-huggingface-token-here
 ```
 
 ## Cara Menjalankan
+
+GUI:
+
+```bash
+python app.py
+```
+
+Lalu, buka http://127.0.0.1:5000 pada browser
 
 Mode interaktif:
 
