@@ -1,13 +1,21 @@
+# --- Web Framework ---
+Flask>=3.0.0
+Werkzeug>=3.0.0
+
+# --- Core Dependencies ---
 nltk>=3.8
+requests>=2.31.0
+openai>=1.0.0
+
+# --- Data Science & Utilities ---
 scikit-learn>=1.3
 numpy>=1.24
 pandas>=2.0
-requests>=2.31.0
-openai>=1.0.0
+
+# --- Testing ---
 pytest>=8.0
 
-
-# Optional local-model alternatives, not required for the OpenAI GPT workflow:
+# --- Optional: Local-model alternatives ---
 # transformers>=4.35
 # torch>=2.0
 # sentence-transformers>=2.2
