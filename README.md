@@ -32,7 +32,7 @@ GUI:
 python app.py
 ```
 
-Lalu, buka http://127.0.0.1:5000 pada browser
+Lalu, buka http://127.0.0.1:5000 pada browser<br>
 
 Mode interaktif:
 
